@@ -48,9 +48,15 @@ struct BypassState {
     std::atomic<bool> output_replaced{}; ///< the latest output pass was replaced
 };
 
+/// Set by the renderer when the host cannot run the network at speed: emulated in software, its
+/// matrix multiplies take ~100 ms a frame on Intel Arc (B580: 10 FPS).
+inline std::atomic<bool> g_host_forces_bypass{};
+
 inline bool BypassEnabled(u64 program_id) {
     return program_id == ProgramId &&
-           Settings::values.oot_anti_aliasing.GetValue() == Settings::OotAntiAliasing::NoSharpening;
+           (Settings::values.oot_anti_aliasing.GetValue() ==
+                Settings::OotAntiAliasing::NoSharpening ||
+            g_host_forces_bypass.load(std::memory_order_relaxed));
 }
 
 } // namespace VideoCommon::OotNetwork

@@ -315,6 +315,21 @@ RasterizerVulkan::RasterizerVulkan(Core::Frontend::EmuWindow& emu_window_, Tegra
             return static_cast<RasterizerVulkan*>(argument)->FencesQuiet(strict, *epoch);
         },
         this);
+    // Intel GPUs lack NVIDIA's matrix shapes: even on their own 8x16x16 matrices, Ocarina of
+    // Time's anti-aliasing network costs time. Skip it as "No sharpening" does;
+    // EDEN_ARC_OOT_NETWORK=1 keeps it.
+    const VkDriverId driver_id = device.GetDriverID();
+    const bool intel = driver_id == VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS ||
+                       driver_id == VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA;
+    const char* const keep_network = std::getenv("EDEN_ARC_OOT_NETWORK");
+    const bool force_bypass = intel && !device.IsCooperativeHmmaSupported() &&
+                              !device.IsCooperativeHmma16x16x16Supported() &&
+                              !(keep_network && std::string_view{keep_network} == "1");
+    VideoCommon::OotNetwork::g_host_forces_bypass.store(force_bypass, std::memory_order_relaxed);
+    if (force_bypass) {
+        LOG_INFO(Render_Vulkan, "Ocarina of Time: anti-aliasing network skipped on this Intel GPU "
+                                "(EDEN_ARC_OOT_NETWORK=1 keeps it)");
+    }
 }
 
 RasterizerVulkan::~RasterizerVulkan() {
