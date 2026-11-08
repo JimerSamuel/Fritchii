@@ -6,84 +6,175 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 -->
 
+<h1 align="center">Fritchii · Edición Intel Arc</h1>
+
 <p align="center">
-  <img src="dist/branding/lichii_icon_with_logo.png" alt="Lichii" width="600">
+  <b>Emulador experimental de Nintendo Switch / Switch 2 optimizado para GPUs Intel Arc.</b><br>
+  De <b>10 FPS a 30 FPS</b> en <i>The Legend of Zelda: Ocarina of Time</i> con una Arc B580.
 </p>
 
-# Lichii
-
-Lichii is an experimental, open-source Nintendo Switch and Switch 2 emulator written in C++. It builds on Eglantine, Eden, yuzu and Sudachi, preserving their contributions while developing this fork's game compatibility and renderer fixes.
-
-This is an independent fork, not an official release of those upstream projects. Lichii is not affiliated with Nintendo.
-
-## Downloads and setup
-
-Published builds belong on this fork's [releases page](https://github.com/zortos293/Eglantine/releases). The repository still uses its historical Eglantine name; the desktop application is now Lichii.
-
-On Windows, extract the entire build archive and run **lichii.exe**. Only use games and system files you have legally obtained. Games, keys and firmware are not included.
-
-### Existing saves and settings
-
-The rebrand intentionally retains the existing Eden/Eglantine data directories and configuration keys. It does not move or delete saves, settings or shader caches. Back up your saves before testing experimental builds.
-
-## Compatibility and issue reports
-
-Compatibility and performance vary by game, hardware and driver. Rendering errors, stutters and crashes remain possible. Passing automated tests does not establish that a game renders correctly, and this project makes no universal frame-rate guarantee.
-
-When [reporting an issue](https://github.com/zortos293/Eglantine/issues), include:
-
-- The exact build, game version, CPU, GPU and driver version.
-- Relevant settings and steps to reproduce the problem.
-- A screenshot and the log from the affected session, after checking it for personal information.
-
-Do not upload game files, keys, firmware or private account information.
-
-## Building and contributing
-
-See the [build guide](docs/Build.md), [user documentation](docs/user/README.md) and [coding guidelines](docs/Coding.md). Some inherited documentation and internal build target names still use upstream names. The GUI build target remains `yuzu`; its output is `lichii.exe` on Windows and `lichii` on other desktop platforms.
-
-Keep changes focused and distinguish code-level checks from actual gameplay testing.
-
-## Artwork
-Art created by YOB (yobslab)
-The supplied Lichii logo, icon and library artwork are in [dist/branding](dist/branding). Windows, Linux and macOS icon resources are generated from that artwork by [Generate-LichiiIcons.ps1](tools/Generate-LichiiIcons.ps1).
-
-## Support Lichii
-
-Lichii is free and stays free. If you want to help, you can donate in crypto. Donations help pay for the AI tools and build machines used to develop this open-source project faster.
-
-**Solana (SOL)**
-```text
-JepEjfyWjGjhJvHSrqj52KtLjcbbbmUh1iGqerYBF4w
-```
-
-**Ethereum (ETH)**
-```text
-0x055ABa1b80Bc35C836Ce7E9F47c2b3d6C75b5534
-```
-
-**Bitcoin (BTC)**
-```text
-bc1qcvxdpf4qvdhqp8ee4s355cjmxrzsphsdwpl8w4
-```
-
-**BNB Smart Chain (BNB)**
-```text
-0x055ABa1b80Bc35C836Ce7E9F47c2b3d6C75b5534
-```
-
-**Polygon**
-```text
-0x055ABa1b80Bc35C836Ce7E9F47c2b3d6C75b5534
-```
-
-Send each coin on its matching network. Coins sent on the wrong network can't be recovered.
+<p align="center">
+  <img alt="GPU" src="https://img.shields.io/badge/GPU-Intel%20Arc%20B580-0071C5?logo=intel&logoColor=white">
+  <img alt="API" src="https://img.shields.io/badge/API-Vulkan%201.4-AC162C?logo=vulkan&logoColor=white">
+  <img alt="Compilador" src="https://img.shields.io/badge/compilador-clang--cl%2023-262D3A?logo=llvm&logoColor=white">
+  <img alt="Licencia" src="https://img.shields.io/badge/licencia-GPL--3.0-blue">
+</p>
 
 > [!NOTE]
-> Donations are voluntary gifts and are non-refundable. A donation does not buy any product, service, perk, early access, exclusive build, priority support or say in the project. Every release stays free and public for everyone.
+> Este es un fork independiente de [Fritchii](https://github.com/Frizti/Fritchii), que a su vez
+> viene de Lichii, Eglantine, Eden, yuzu y Sudachi. No es una versión oficial de esos proyectos ni
+> está afiliado a Nintendo ni a Intel. Los cambios están en la rama
+> [`arc-b580`](https://github.com/JimerSamuel/Fritchii/tree/arc-b580).
 
-## Credits and license
+---
 
-Lichii inherits the work of the Eglantine, Eden, yuzu and Sudachi projects and their contributors, including Eglantine's original developer Camille LaVey. Original copyright notices and third-party licenses are retained.
+## ¿Por qué este fork?
 
-See [LICENSE.txt](LICENSE.txt) and the source files for applicable license terms.
+Los juegos de Switch 2 usan **redes neuronales** en la GPU (escalado, anti-aliasing, efectos). En la
+consola corren sobre los núcleos de matrices de NVIDIA, con una instrucción llamada **HMMA**. Los
+emuladores las traducen a la GPU del PC, pero en Intel Arc esa traducción caía en el camino más
+lento posible: cada multiplicación de matrices se emulaba **a mano, instrucción por instrucción**.
+
+El resultado en una Arc B580 de 12 GB con el driver más reciente:
+
+```
+Ocarina of Time · Arc B580 · driver 101.9150
+  antes:   ~100 ms por frame  →  10 FPS   (la GPU ocupada en 8 redes emuladas)
+  ahora:   33,4 ms por frame  →  30 FPS   (el límite del propio juego)
+```
+
+## Qué cambia
+
+### 1. Las matrices de NVIDIA, ahora sobre las matrices de Intel (XMX)
+
+Las GPUs Arc **sí** tienen unidades de matrices por hardware (XMX), y Vulkan las expone con
+`VK_KHR_cooperative_matrix`. El emulador solo aceptaba las formas de NVIDIA y AMD; Intel Xe2 ofrece
+otra:
+
+| GPU | Forma que ofrece (M×N×K, fp16) | Antes | Ahora |
+|---|---|---|---|
+| NVIDIA RTX | 16×8×16 (la del juego) | ✅ matrices | ✅ matrices |
+| AMD RDNA3+ | 16×16×16 | ✅ matrices | ✅ matrices |
+| **Intel Arc (Xe2)** | **8×16×16** | ❌ emulación lenta | ✅ **matrices** |
+
+La clave es un truco de álgebra: el producto del juego, traspuesto, tiene **exactamente** la forma
+de Intel.
+
+```
+         D (16×8)  =  A (16×16) · B (16×8)  +  C (16×8)        ← lo que pide el juego
+
+  ⇔     Dᵀ (8×16)  =  Bᵀ (8×16) · Aᵀ (16×16) +  Cᵀ (8×16)       ← lo que sabe hacer Intel
+```
+
+```mermaid
+flowchart LR
+    R["Registros de los 32 hilos<br/>(formato NVIDIA)"] --> S["Memoria compartida<br/>baldosas A, B y C"]
+    S -- "B por filas → Bᵀ" --> M["Multiplicación en XMX<br/>8×16×16"]
+    S -- "A por columnas → Aᵀ" --> M
+    S -- "C por columnas → Cᵀ" --> M
+    M -- "Dᵀ por columnas = D" --> S2["Memoria compartida"] --> R2["Cada hilo lee su resultado"]
+```
+
+No hace falta copiar ni reordenar datos: basta con **leer las mismas baldosas en otro orden**.
+
+**Seguro por diseño.** Al arrancar, el emulador ejecuta una autoprueba con matrices conocidas y
+compara el resultado de cada hilo bit a bit. Si un driver hace algo distinto, se vuelve solo a la
+emulación de siempre. En el registro verás una de estas líneas:
+
+```
+Guest tensor operations run transposed on 8x16x16 cooperative matrices    ← activo
+Cooperative matrix self-test failed (...)                                 ← emulación
+```
+
+### 2. Ocarina of Time: anti-aliasing opcional en Intel
+
+En GPUs Intel, la red de anti-aliasing de Ocarina se salta automáticamente, como hace el ajuste
+*No sharpening* que ya existía. La imagen queda limpia y sin los halos del enfoque del juego.
+
+### 3. Compila en Windows con las herramientas actuales
+
+- Arreglo para **clang-cl 23** con la STL de **Visual Studio 2026** (MSVC 14.51). Antes fallaba
+  un `static_assert` de la STL dentro del traductor de shaders.
+- Script de compilación de un solo paso: [`tools/arc/build.bat`](tools/arc/build.bat).
+
+### 4. Herramientas para diagnosticar GPUs Intel
+
+- [`tools/arc/arc_test.ps1`](tools/arc/arc_test.ps1): lanza pruebas A/B con distintas variables de
+  depuración y calcula los FPS medios del registro.
+- [`tools/arc/DIAGNOSTICO.md`](tools/arc/DIAGNOSTICO.md): el diagnóstico completo, con tiempos de GPU
+  por shader, hipótesis descartadas y las formas de matriz que expone la B580.
+
+## Variables de entorno
+
+| Variable | Efecto |
+|---|---|
+| `EDEN_ARC_NO_COOP_MATRIX=1` | Desactiva las matrices de Intel y vuelve a la emulación (para comparar). |
+| `EDEN_ARC_OOT_NETWORK=1` | Mantiene la red de anti-aliasing de Ocarina en Intel. |
+| `EDEN_DKB_FRAME_TRACE=1` | Tiempos de GPU por shader en el registro. |
+| `EDEN_NX2_SHADER_DUMP=<carpeta>` | Vuelca los shaders del juego para analizarlos. |
+
+## Uso
+
+1. Descarga la build (o compílala, ver abajo) y extrae **toda** la carpeta.
+2. Ejecuta `lichii.exe`. Usa los mismos datos que Fritchii/Lichii
+   (`%APPDATA%\eden`), así que tus juegos, partidas y ajustes ya estarán ahí.
+3. Usa solo juegos, claves y firmware que hayas obtenido legalmente. No se incluyen.
+
+Para probar desde PowerShell:
+
+```powershell
+& "C:\ruta\a\lichii.exe"
+```
+
+## Compilar en Windows
+
+Necesitas Visual Studio 2026 (C++), LLVM 23 (clang-cl), CMake, Ninja y el Vulkan SDK.
+Ajusta las rutas al principio de [`tools/arc/build.bat`](tools/arc/build.bat) y ejecuta:
+
+```bat
+tools\arc\build.bat
+```
+
+El ejecutable queda en `build\release\bin\lichii.exe`. La guía general está en
+[docs/Build.md](docs/Build.md).
+
+## Hoja de ruta
+
+- [x] Diagnóstico: el cuello de botella es la GPU, en las redes HMMA emuladas.
+- [x] HMMA sobre las matrices XMX de Intel (8×16×16, traspuesto).
+- [x] Autoprueba al arrancar con vuelta atrás automática.
+- [ ] Probar más juegos de Switch 2 con redes (Donkey Kong Bananza, Kirby Air Riders…).
+- [ ] Usar subgrupos de 16 hilos, el tamaño natural de Intel, en lugar de forzar 32.
+- [ ] Sustituir el DLSS de los juegos por **XeSS** en Intel, igual que ya se hace con FSR 3.1.
+- [ ] Llevar estos cambios a Fritchii y Eglantine para que lleguen a todos.
+
+## Reportar problemas
+
+Abre un [issue](https://github.com/JimerSamuel/Fritchii/issues) con:
+
+- Build, versión del juego, CPU, GPU y versión del driver.
+- Pasos para reproducirlo y una captura.
+- El registro `%APPDATA%\eden\log\eden_log.txt` de esa sesión (revísalo antes por si tiene datos
+  personales).
+
+No subas juegos, claves, firmware ni datos de tu cuenta.
+
+## English summary
+
+An Intel Arc–focused fork of Fritchii. Switch 2 games run neural networks through NVIDIA's HMMA
+tensor instruction, which used to fall back to slow shader emulation on Arc because Xe2 only
+exposes **8×16×16** cooperative matrices. This fork runs the guest's 16×8×16 product as its
+transpose (Dᵀ = Bᵀ·Aᵀ + Cᵀ) on Intel's XMX units through the existing shared-memory tiles, guarded
+by a startup self-test. Result on an Arc B580: Ocarina of Time goes from **~100 ms to 33 ms per
+frame (10 → 30 FPS, the game's cap)**. It also builds with clang-cl 23 + MSVC 14.51 and adds Arc
+diagnostic tools.
+
+## Créditos y licencia
+
+Este fork hereda el trabajo de **Fritchii** (Frizti), **Lichii** (zortos293), **Eglantine** (Camille
+LaVey y colaboradores), **Eden**, **yuzu** y **Sudachi**. Se conservan todos los avisos de copyright y
+las licencias de terceros. Si quieres apoyar el desarrollo, apoya también a esos proyectos.
+
+Arte de Lichii creado por YOB (yobslab), en [dist/branding](dist/branding).
+
+Licencia: [GPL-3.0](LICENSE.txt). Consulta los archivos fuente para los términos aplicables.
