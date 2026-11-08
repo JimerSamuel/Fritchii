@@ -40,6 +40,13 @@ struct StorageBufferAddr {
     u32 indirect{~0U};
 };
 
+/// Whether a range holds an address. std::ranges::find would use MSVC STL 14.51's vectorized find,
+/// which has no case for this 12-byte type (a static_assert under clang-cl 23).
+template <typename Range>
+bool ContainsAddr(const Range& range, const StorageBufferAddr& value) {
+    return std::ranges::any_of(range, [&](const StorageBufferAddr& item) { return item == value; });
+}
+
 /// Block iterator to a global memory instruction and the storage buffer it uses
 struct StorageInst {
     StorageBufferAddr storage_buffer;
@@ -1156,7 +1163,7 @@ small_vector<StorageBufferAddr, 4> NativePointerCandidates(const IR::U32& low_ad
                         const StorageBufferAddr pointer{.index = index.U32(),
                                                         .offset = first + slot * stride};
                         if (Common::IsAligned(pointer.offset, 8) &&
-                            std::ranges::find(candidates, pointer) == candidates.end() &&
+                            !ContainsAddr(candidates, pointer) &&
                             env.IsCbufStorageBufferPointer(pointer.index, pointer.offset)) {
                             candidates.push_back(pointer);
                             dynamic = true;
@@ -1170,7 +1177,7 @@ small_vector<StorageBufferAddr, 4> NativePointerCandidates(const IR::U32& low_ad
             }
             const StorageBufferAddr pointer{.index = index.U32(), .offset = offset.U32()};
             if (Common::IsAligned(pointer.offset, 8) &&
-                std::ranges::find(candidates, pointer) == candidates.end() &&
+                !ContainsAddr(candidates, pointer) &&
                 env.IsCbufStorageBufferPointer(pointer.index, pointer.offset)) {
                 candidates.push_back(pointer);
             }
@@ -1233,7 +1240,7 @@ small_vector<StorageBufferAddr, 4> NativePointerCandidates(const IR::U32& low_ad
             // table per object type: every slot whose table entry is a pointer). Those are table
             // candidates, bound only in the bindings the other storage buffers leave free.
             const auto add = [&](const StorageBufferAddr& pointer, bool table) {
-                if (std::ranges::find(candidates, pointer) != candidates.end()) {
+                if (ContainsAddr(candidates, pointer)) {
                     return;
                 }
                 if (table && env.ShaderStage() != Stage::Compute) {
@@ -1246,8 +1253,7 @@ small_vector<StorageBufferAddr, 4> NativePointerCandidates(const IR::U32& low_ad
                     if (!info.tables_enabled) {
                         return;
                     }
-                    if (std::ranges::find(info.table_candidates, pointer) ==
-                        info.table_candidates.end()) {
+                    if (!ContainsAddr(info.table_candidates, pointer)) {
                         info.table_candidates.push_back(pointer);
                     }
                 }
@@ -1389,8 +1395,7 @@ bool CollectStorageBuffers(IR::Block& block, IR::Inst& inst, StorageInfo& info, 
                 }
             }
             for (const StorageBufferAddr& candidate : candidates) {
-                if (std::ranges::find(info.table_candidates, candidate) !=
-                    info.table_candidates.end()) {
+                if (ContainsAddr(info.table_candidates, candidate)) {
                     const StorageBufferAddr holder{.index = candidate.index,
                                                    .offset = candidate.offset};
                     const auto takes_binding = [&info](const StorageBufferAddr& buffer) {
