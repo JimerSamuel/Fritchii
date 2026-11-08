@@ -67,3 +67,6 @@ vulkansdk*.exe
 
 # Build-time generated external sources
 externals/generated
+
+# Arc B580 test results (logs, shader dumps)
+tools/arc/results_*/
