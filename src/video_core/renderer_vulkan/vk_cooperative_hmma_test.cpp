@@ -123,10 +123,10 @@ u32 CountWrongLanes(const Matrices& m, std::span<const u32> words) {
     return wrong;
 }
 
-bool RunTest(const Device& device) {
+bool RunTest(const Device& device, Shader::Backend::SPIRV::CooperativeHmmaTestPath path) {
     const auto& logical = device.GetLogical();
     const std::vector<u32> code =
-        Shader::Backend::SPIRV::EmitCooperativeHmmaTest(device.SupportedSpirvVersion());
+        Shader::Backend::SPIRV::EmitCooperativeHmmaTest(device.SupportedSpirvVersion(), path);
     const vk::ShaderModule module = logical.CreateShaderModule(VkShaderModuleCreateInfo{
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
         .pNext = nullptr,
@@ -159,13 +159,23 @@ bool RunTest(const Device& device) {
         .pushConstantRangeCount = 0,
         .pPushConstantRanges = nullptr,
     });
+    // The shared memory paths run with subgroups forced to 32 lanes, as the game's pipelines do.
+    const VkPipelineShaderStageRequiredSubgroupSizeCreateInfoEXT subgroup_size_ci{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO_EXT,
+        .pNext = nullptr,
+        .requiredSubgroupSize = GuestWarpSize,
+    };
+    const bool force_subgroup_size =
+        path != Shader::Backend::SPIRV::CooperativeHmmaTestPath::Registers &&
+        device.IsExtSubgroupSizeControlSupported() &&
+        device.IsGuestWarpSizeSupported(VK_SHADER_STAGE_COMPUTE_BIT);
     const vk::Pipeline pipeline = logical.CreateComputePipeline(VkComputePipelineCreateInfo{
         .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
         .stage{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .pNext = nullptr,
+            .pNext = force_subgroup_size ? &subgroup_size_ci : nullptr,
             .flags = VK_PIPELINE_SHADER_STAGE_CREATE_REQUIRE_FULL_SUBGROUPS_BIT,
             .stage = VK_SHADER_STAGE_COMPUTE_BIT,
             .module = *module,
@@ -304,9 +314,9 @@ bool RunTest(const Device& device) {
 
 } // Anonymous namespace
 
-bool TestCooperativeHmma(const Device& device) {
+bool TestCooperativeHmma(const Device& device, Shader::Backend::SPIRV::CooperativeHmmaTestPath path) {
     try {
-        return RunTest(device);
+        return RunTest(device, path);
     } catch (const std::exception& exception) {
         LOG_WARNING(Render_Vulkan,
                     "Cooperative matrix self-test failed ({}): guest tensor operations stay in "

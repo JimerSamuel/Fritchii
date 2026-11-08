@@ -111,6 +111,8 @@ struct Profile {
     bool support_cooperative_hmma{};
     /// Without the above, HMMA runs on 16x16x16 cooperative matrices through shared memory
     bool support_cooperative_hmma_16x16x16{};
+    /// With the above, the matrices are 8x16x16 and compute the transposed product (Intel Xe2)
+    bool cooperative_hmma_transposed{};
     u32 max_subgroup_size{};
 
     u32 gl_max_compute_smem_size{};

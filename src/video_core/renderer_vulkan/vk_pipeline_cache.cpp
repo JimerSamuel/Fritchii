@@ -596,7 +596,18 @@ PipelineCache::PipelineCache(Tegra::MaxwellDeviceMemoryManager& device_memory_,
         device.IsCooperativeHmmaSupported() && TestCooperativeHmma(device);
     profile.support_cooperative_hmma_16x16x16 =
         !profile.support_cooperative_hmma && device.IsCooperativeHmma16x16x16Supported();
-    if (profile.support_cooperative_hmma_16x16x16) {
+    // Intel Xe2: EDEN_ARC_NO_COOP_MATRIX=1 keeps the shader emulation for A/B runs.
+    const char* const arc_no_coop = std::getenv("EDEN_ARC_NO_COOP_MATRIX");
+    if (!profile.support_cooperative_hmma && !profile.support_cooperative_hmma_16x16x16 &&
+        device.IsCooperativeHmma8x16x16Supported() &&
+        !(arc_no_coop && std::string_view{arc_no_coop} == "1") &&
+        TestCooperativeHmma(device,
+                            Shader::Backend::SPIRV::CooperativeHmmaTestPath::SharedTransposed)) {
+        profile.support_cooperative_hmma_16x16x16 = true;
+        profile.cooperative_hmma_transposed = true;
+        LOG_INFO(Render_Vulkan, "Guest tensor operations run transposed on 8x16x16 cooperative "
+                                "matrices");
+    } else if (profile.support_cooperative_hmma_16x16x16) {
         LOG_INFO(Render_Vulkan, "Guest tensor operations run on 16x16x16 cooperative matrices");
     }
 

@@ -59,8 +59,16 @@ inline bool MeshFirstEnabled() {
 /// c0 c1 as input, then d0 d1 as output.
 constexpr u32 COOPERATIVE_HMMA_TEST_LANE_WORDS = 10;
 
+/// Which cooperative matrix lowering of HMMA.16816.F16 a self-test runs.
+enum class CooperativeHmmaTestPath {
+    Registers,        ///< 16x8x16 matrices from the lanes' registers
+    Shared16x16x16,   ///< 16x16x16 matrices through shared memory
+    SharedTransposed, ///< 8x16x16 matrices through shared memory, transposed (Intel Xe2)
+};
+
 /// A compute shader of one warp running the HMMA.16816.F16 lowering on the registers in its storage
 /// buffer (set 0, binding 0), to check at startup that the driver's matrix layout is the expected.
-[[nodiscard]] std::vector<u32> EmitCooperativeHmmaTest(u32 spirv_version);
+[[nodiscard]] std::vector<u32> EmitCooperativeHmmaTest(
+    u32 spirv_version, CooperativeHmmaTestPath path = CooperativeHmmaTestPath::Registers);
 
 } // namespace Shader::Backend::SPIRV

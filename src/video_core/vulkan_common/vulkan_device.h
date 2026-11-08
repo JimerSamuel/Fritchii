@@ -679,6 +679,12 @@ FN_MAX_LIMIT_LIST
         return cooperative_hmma_16x16x16;
     }
 
+    /// Returns true if the guest's HMMA can run transposed through shared memory on 8x16x16
+    /// cooperative matrices of 16-bit floats (Intel Xe2), with 32-lane compute subgroups.
+    bool IsCooperativeHmma8x16x16Supported() const {
+        return cooperative_hmma_8x16x16;
+    }
+
     /// Returns true if the device supports VK_KHR_shader_quad_control.
     bool IsKhrShaderQuadControlSupported() const {
         return extensions.shader_quad_control && features.shader_quad_control.shaderQuadControl;
@@ -1351,6 +1357,7 @@ private:
     bool float16_math{};                       ///< Shaders may do float16 arithmetic.
     bool cooperative_hmma_16x8x16{};           ///< HMMA runs on the guest's matrix shape.
     bool cooperative_hmma_16x16x16{};          ///< HMMA runs on 16x16x16 matrices.
+    bool cooperative_hmma_8x16x16{};           ///< HMMA runs transposed on 8x16x16 matrices.
     bool is_integrated{};                      ///< Is GPU an iGPU.
     bool is_virtual{};                         ///< Is GPU a virtual GPU.
     bool is_non_gpu{};                         ///< Is SoftwareRasterizer, FPGA, non-GPU device.
